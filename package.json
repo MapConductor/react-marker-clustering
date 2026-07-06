@@ -1,0 +1,46 @@
+{
+  "name": "@mapconductor/react-marker-clustering",
+  "version": "0.1.0",
+  "description": "Marker clustering for MapConductor React SDK",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "clean": "rm -rf dist",
+    "test": "echo 'No tests yet'"
+  },
+  "keywords": [
+    "maps",
+    "clustering",
+    "markers",
+    "react",
+    "typescript"
+  ],
+  "author": "MapConductor",
+  "license": "Apache2",
+  "dependencies": {
+    "@mapconductor/js-sdk-core": "workspace:*",
+    "@mapconductor/js-sdk-react": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "react": "^19.2.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
+  }
+}
