@@ -24,3 +24,16 @@ export interface MarkerClusterDebugInfo {
     readonly cellY: number;
     readonly hullPoints: GeoPoint[];
 }
+
+/** Declarative native cluster icon options. Functions cannot cross the RN bridge. */
+export interface MarkerClusterIconOptions {
+    fillColor?: string;
+    strokeColor?: string;
+    strokeWidth?: number;
+    scale?: number;
+    labelTextColor?: string | null;
+    labelTextSize?: number;
+    labelStrokeColor?: string;
+    iconSize?: number;
+    debug?: boolean;
+}
