@@ -87,7 +87,11 @@ class MarkerClusterGroupRenderer(
 
     @Composable
     override fun MapViewScope.Render() {
-        MarkerClusterGroup(state = state, markers = markers)
+        MarkerClusterGroup(
+            state = state,
+            markers = markers,
+            trackMarkerUpdates = false,
+        )
     }
 
     override fun dispose() {
