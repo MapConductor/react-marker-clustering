@@ -7,6 +7,9 @@ module.exports = {
           'import com.mapconductor.react.markerclustering.MapConductorMarkerClusteringPackage;',
         packageInstance: 'new MapConductorMarkerClusteringPackage()',
       },
+      ios: {
+        sourceDir: './ios',
+      },
     },
   },
 };

@@ -19,6 +19,8 @@
   },
   "files": [
     "android",
+    "ios",
+    "MapConductorReactMarkerClustering.podspec",
     "react-native.config.js",
     "dist"
   ],

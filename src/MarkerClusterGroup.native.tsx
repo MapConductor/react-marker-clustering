@@ -37,13 +37,13 @@ export interface MarkerClusterGroupProps {
 let nextGroupId = 1;
 
 export function MarkerClusterGroup(props: MarkerClusterGroupProps): React.ReactElement | null {
-    if (Platform.OS !== 'android') {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
         return <>{props.children ?? null}</>;
     }
-    return <AndroidMarkerClusterGroup {...props} />;
+    return <NativeMarkerClusterGroup {...props} />;
 }
 
-function AndroidMarkerClusterGroup(props: MarkerClusterGroupProps): React.ReactElement | null {
+function NativeMarkerClusterGroup(props: MarkerClusterGroupProps): React.ReactElement | null {
     const {
         markers,
         children,
