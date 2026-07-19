@@ -9157,14 +9157,14 @@
     {
       "filePath": "\/Users\/masashi\/mapconductor\/ios-sdk\/ios-marker-cluster\/Sources\/MapConductorMarkerCluster\/MarkerClusterStrategy.swift",
       "kind": "FloatLiteral",
-      "offset": 78841,
+      "offset": 75788,
       "length": 9,
       "value": "6371009.0"
     },
     {
       "filePath": "\/Users\/masashi\/mapconductor\/ios-sdk\/ios-marker-cluster\/Sources\/MapConductorMarkerCluster\/MarkerClusterStrategy.swift",
       "kind": "FloatLiteral",
-      "offset": 78896,
+      "offset": 75843,
       "length": 3,
       "value": "2.0"
     }

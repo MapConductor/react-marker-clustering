@@ -18,6 +18,7 @@ public final class MarkerClusterExtensionRenderer<ActualMarker>: NativeMapExtens
     private let state = MarkerClusterGroupState()
     private var markersById: [String: MarkerState] = [:]
     private var markers: [MarkerState] = []
+    private var appliedOptions: MarkerClusterOptions?
 
     public init(extensionId: String, eventSink: @escaping NativeMapExtensionEventSink) {
         self.extensionId = extensionId
@@ -26,25 +27,54 @@ public final class MarkerClusterExtensionRenderer<ActualMarker>: NativeMapExtens
 
     public func update(payload: [String: Any]) {
         let options = MarkerClusterOptions.decode(mcMap(payload["options"]))
-        state.clusterRadiusPx = options.clusterRadiusPx
-        state.minClusterSize = options.minClusterSize
-        state.expandMargin = options.expandMargin
-        state.enableZoomAnimation = options.enableZoomAnimation
-        state.enablePanAnimation = options.enablePanAnimation
-        state.zoomAnimationDurationMillis = options.zoomAnimationDurationMillis
-        state.cameraIdleDebounceMillis = options.cameraIdleDebounceMillis
-        state.tileSize = options.tileSize
-        state.debugHullPolygons = options.debugHullPolygons
-        state.clusterIconProvider = options.iconProvider
-        state.onClusterClick = options.onClusterClickEnabled
-            ? { [weak self] cluster in
-                guard let self else { return }
-                self.eventSink(self.extensionId, "clusterClick", [
-                    "count": cluster.count,
-                    "markerIds": cluster.markerIds
-                ])
-            }
-            : nil
+        let previous = appliedOptions
+        // MarkerClusterGroupState rebuilds its native strategies from several property
+        // didSet observers. RN sends the complete options payload for every update, so
+        // assigning unchanged values here would discard the current strategy and add all
+        // provider markers again. Apply only actual option changes, matching Android's
+        // MarkerClusterGroupRenderer.updateState().
+        if previous == nil || previous?.clusterRadiusPx != options.clusterRadiusPx {
+            state.clusterRadiusPx = options.clusterRadiusPx
+        }
+        if previous == nil || previous?.minClusterSize != options.minClusterSize {
+            state.minClusterSize = options.minClusterSize
+        }
+        if previous == nil || previous?.expandMargin != options.expandMargin {
+            state.expandMargin = options.expandMargin
+        }
+        if previous == nil || previous?.enableZoomAnimation != options.enableZoomAnimation {
+            state.enableZoomAnimation = options.enableZoomAnimation
+        }
+        if previous == nil || previous?.enablePanAnimation != options.enablePanAnimation {
+            state.enablePanAnimation = options.enablePanAnimation
+        }
+        if previous == nil || previous?.zoomAnimationDurationMillis != options.zoomAnimationDurationMillis {
+            state.zoomAnimationDurationMillis = options.zoomAnimationDurationMillis
+        }
+        if previous == nil || previous?.cameraIdleDebounceMillis != options.cameraIdleDebounceMillis {
+            state.cameraIdleDebounceMillis = options.cameraIdleDebounceMillis
+        }
+        if previous == nil || previous?.tileSize != options.tileSize {
+            state.tileSize = options.tileSize
+        }
+        if previous == nil || previous?.iconSignature != options.iconSignature {
+            state.clusterIconProvider = options.iconProvider
+        }
+        if previous == nil || previous?.onClusterClickEnabled != options.onClusterClickEnabled {
+            state.onClusterClick = options.onClusterClickEnabled
+                ? { [weak self] cluster in
+                    guard let self else { return }
+                    self.eventSink(self.extensionId, "clusterClick", [
+                        "count": cluster.count,
+                        "markerIds": cluster.markerIds
+                    ])
+                }
+                : nil
+        }
+        if previous == nil || previous?.debugHullPolygons != options.debugHullPolygons {
+            state.debugHullPolygons = options.debugHullPolygons
+        }
+        appliedOptions = options
 
         let markerPayload = mcMap(payload["markers"])
         markers = mcMarkerStatesFromBatch(
@@ -85,6 +115,7 @@ private struct MarkerClusterOptions {
     let cameraIdleDebounceMillis: Int
     let tileSize: Double
     let debugHullPolygons: Bool
+    let iconSignature: String
     let iconProvider: MarkerClusterGroupState.ClusterIconProvider
 
     static let Default = MarkerClusterOptions(
@@ -98,11 +129,14 @@ private struct MarkerClusterOptions {
         cameraIdleDebounceMillis: MarkerClusterDefaults.cameraIdleDebounceMillis,
         tileSize: MarkerClusterDefaults.tileSize,
         debugHullPolygons: false,
+        iconSignature: "default",
         iconProvider: MarkerClusterDefaults.iconProvider
     )
 
     static func decode(_ map: [String: Any]?) -> MarkerClusterOptions {
         guard let map else { return .Default }
+        let imageIconMap = mcMap(map["clusterIconProvider"])
+        let colorIconMap = mcMap(map["clusterIcon"])
         let iconProvider = ClusterIconOptions.decode(mcMap(map["clusterIconProvider"]))?.iconProvider
             ?? ColorClusterIconOptions.decode(mcMap(map["clusterIcon"]))?.iconProvider
             ?? Default.iconProvider
@@ -117,9 +151,23 @@ private struct MarkerClusterOptions {
             cameraIdleDebounceMillis: mcInt(map["cameraIdleDebounceMs"], default: Default.cameraIdleDebounceMillis),
             tileSize: mcDouble(map["tileSize"], default: Default.tileSize),
             debugHullPolygons: mcBool(map["debugHullPolygons"], default: false),
+            iconSignature: markerClusterIconSignature(image: imageIconMap, color: colorIconMap),
             iconProvider: iconProvider
         )
     }
+}
+
+private func markerClusterIconSignature(image: [String: Any]?, color: [String: Any]?) -> String {
+    let value: [String: Any] = [
+        "image": (image as Any?) ?? NSNull(),
+        "color": (color as Any?) ?? NSNull()
+    ]
+    guard JSONSerialization.isValidJSONObject(value),
+          let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
+          let signature = String(data: data, encoding: .utf8) else {
+        return String(describing: value)
+    }
+    return signature
 }
 
 /// A caller-provided image (e.g. `imageDefault`) with the cluster count drawn on top,
