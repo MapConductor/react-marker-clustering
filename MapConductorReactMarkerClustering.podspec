@@ -10,9 +10,15 @@ Pod::Spec.new do |s|
   s.author = package["author"]
   s.homepage = "https://github.com/mapconductor/react-sdk"
   s.source = { :path => __dir__ }
-  s.platform = :ios, "15.0"
+  s.platform = :ios, "15.1"
   s.source_files = "ios/*.{h,m,mm,swift}"
-  s.vendored_frameworks = "ios/Frameworks/MapConductorMarkerCluster.xcframework"
+  # MapConductorMarkerCluster is a source pod (see ios-sdk/ios-marker-cluster's podspec), not a
+  # vendored prebuilt xcframework - see ios-sdk/CLAUDE.md's "iOS Provider Distribution" section:
+  # any module that imports MapConductorCore directly must build in the same (source-pod, no
+  # library evolution) mode MapConductorCore itself uses, or Xcode's module-interface
+  # verification fails with mismatched-deployment-target/"cannot load underlying module" errors.
   s.dependency "React-Core"
+  s.dependency "MapConductorCore"
   s.dependency "MapConductorReactNativeCore"
+  s.dependency "MapConductorMarkerCluster"
 end
