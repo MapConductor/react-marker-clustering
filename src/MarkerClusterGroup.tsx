@@ -133,6 +133,15 @@ export interface MarkerClusterGroupProps {
     debugHullPolygons?: boolean;
     /** Called after each cluster computation with debug information. */
     onDebugInfo?: (infos: ReturnType<MarkerClusterStrategy['computeClusters']>['debugInfos']) => void;
+    /**
+     * Called before newly appearing individual (non-cluster) markers are
+     * rendered — e.g. when a cluster expands after a zoom. Rendering of the
+     * new cluster state is deferred until the returned promise settles, so
+     * the app can preload marker icon images (and show a loading indicator)
+     * before the markers pop in. A newer recluster supersedes any pending
+     * deferred apply.
+     */
+    prepareExpand?: (appearing: MarkerState[]) => Promise<void>;
 }
 
 /**
@@ -170,6 +179,7 @@ export function MarkerClusterGroup(props: MarkerClusterGroupProps): React.ReactE
         zoomAnimationDurationMs = DEFAULT_ZOOM_ANIMATION_DURATION_MS,
         debugHullPolygons,
         onDebugInfo,
+        prepareExpand,
     } = props;
 
     const parentScope = useMapViewScope();
@@ -345,6 +355,12 @@ export function MarkerClusterGroup(props: MarkerClusterGroupProps): React.ReactE
         if (flights.length > 0) runAnimation(flights, durationMs);
     }, [parentScope, runAnimation]);
 
+    const prepareExpandRef = useRef(prepareExpand);
+    useLayoutEffect(() => { prepareExpandRef.current = prepareExpand; }, [prepareExpand]);
+    // Monotonic token: a newer recluster invalidates any apply still waiting
+    // on prepareExpand, so a stale cluster state is never rendered.
+    const pendingPrepareTokenRef = useRef(0);
+
     const runRecluster = useCallback(() => {
         const camera = cameraRef.current;
         if (!camera) return;
@@ -357,8 +373,27 @@ export function MarkerClusterGroup(props: MarkerClusterGroupProps): React.ReactE
         // Pass empty array when disabled so any previously drawn polygons are removed.
         updateHullPolygons(debugHullPolygonsRef.current ? result.debugInfos : []);
         // 2. Apply marker diff + start animations.
-        applyOutput(result, zoomAnimationDurationMs);
-        onDebugInfoRef.current?.(result.debugInfos);
+        const finish = () => {
+            applyOutput(result, zoomAnimationDurationMs);
+            onDebugInfoRef.current?.(result.debugInfos);
+        };
+        const prepare = prepareExpandRef.current;
+        const appearing = prepare
+            ? result.outputMarkers.filter((m) => !m.id.startsWith('cluster_') && !prevOutputRef.current.has(m.id))
+            : [];
+        if (prepare && appearing.length > 0) {
+            // Keep the current (clustered) rendering on screen until the app
+            // finishes preparing the appearing markers (e.g. icon preloading).
+            const token = ++pendingPrepareTokenRef.current;
+            void Promise.resolve(prepare(appearing))
+                .catch(() => undefined)
+                .then(() => {
+                    if (pendingPrepareTokenRef.current === token) finish();
+                });
+            return;
+        }
+        pendingPrepareTokenRef.current += 1;
+        finish();
     }, [strategy, updateHullPolygons, applyOutput, zoomAnimationDurationMs]);
 
     // Stable refs so the camera effect can always call the latest versions
@@ -420,6 +455,13 @@ export function MarkerClusterGroup(props: MarkerClusterGroupProps): React.ReactE
 
     useEffect(() => {
         if (markersProp === undefined) return;
+        // Same states in the same order = nothing changed. Skip the recluster:
+        // it would cancel any in-flight expand/shrink animation for no reason
+        // (parents often rebuild the array identity on unrelated re-renders).
+        const prev = markersRef.current;
+        if (prev.length === markersProp.length && prev.every((state, i) => state === markersProp[i])) {
+            return;
+        }
         markersRef.current = markersProp;
         sourceVersionRef.current += 1;
         runReclusterRef.current();
