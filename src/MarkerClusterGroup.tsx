@@ -9,10 +9,13 @@ import React, {
 import {
     createGeoPoint,
     createPolygonState,
+    createPolylineState,
     type GeoPoint,
     type MapCameraPosition,
     type MarkerState,
+    type Offset,
     type PolygonState,
+    type PolylineState,
 } from '@mapconductor/js-sdk-core';
 import {
     MapContext,
@@ -68,6 +71,77 @@ function buildHullPolygonState(info: MarkerClusterDebugInfo): PolygonState {
         zIndex: 9,
         geodesic: false,
     });
+}
+
+
+/**
+ * Screen-space fan-out layout for spiderfy. Members start on an even circle
+ * around the cluster and then iteratively repel each other (and the cluster
+ * marker itself) until no pair is closer than markerSize + margin, while a
+ * weak spring toward the center keeps the fan compact. Converges to a ring
+ * for small counts and to packed shells for larger ones.
+ */
+function spiderfyLayout(
+    count: number,
+    markerSizePx: number,
+    marginPx: number,
+    obstacles: Offset[] = [],
+): Offset[] {
+    const desired = markerSizePx + marginPx;
+    // クラスタ中心からの基本距離。脚線が見え、かつ離れすぎない程度
+    const centerClearance = Math.round(markerSizePx * 1.3) + marginPx;
+    const points: Array<{ x: number; y: number }> = Array.from({ length: count }, (_, i) => {
+        // 右方向(0°)基準で均等配置。2件なら左右に並び、ピン形クラスタの頭上を避けやすい
+        const angle = (2 * Math.PI * i) / count;
+        return { x: Math.cos(angle) * centerClearance, y: Math.sin(angle) * centerClearance };
+    });
+    for (let iter = 0; iter < 150; iter++) {
+        let maxMove = 0;
+        for (let i = 0; i < count; i++) {
+            let fx = 0;
+            let fy = 0;
+            // 展開メンバー同士の反発
+            for (let j = 0; j < count; j++) {
+                if (i === j) continue;
+                const dx = points[i].x - points[j].x;
+                const dy = points[i].y - points[j].y;
+                const d = Math.hypot(dx, dy) || 0.01;
+                if (d < desired) {
+                    const push = (desired - d) / 2;
+                    fx += (dx / d) * push;
+                    fy += (dy / d) * push;
+                }
+            }
+            // 周囲に既に表示されているマーカー等(固定障害物)からの反発
+            for (const ob of obstacles) {
+                const dx = points[i].x - ob.x;
+                const dy = points[i].y - ob.y;
+                const d = Math.hypot(dx, dy) || 0.01;
+                if (d < desired) {
+                    const push = desired - d;
+                    fx += (dx / d) * push;
+                    fy += (dy / d) * push;
+                }
+            }
+            const dc = Math.hypot(points[i].x, points[i].y) || 0.01;
+            if (dc < centerClearance) {
+                // クラスタマーカーからの反発
+                const push = centerClearance - dc;
+                fx += (points[i].x / dc) * push;
+                fy += (points[i].y / dc) * push;
+            } else {
+                // 中心へ弱いばね(離れすぎ防止)
+                const pull = (dc - centerClearance) * 0.15;
+                fx -= (points[i].x / dc) * pull;
+                fy -= (points[i].y / dc) * pull;
+            }
+            points[i].x += fx * 0.6;
+            points[i].y += fy * 0.6;
+            maxMove = Math.max(maxMove, Math.abs(fx), Math.abs(fy));
+        }
+        if (maxMove < 0.15) break;
+    }
+    return points;
 }
 
 interface AnimatedMove {
@@ -142,6 +216,31 @@ export interface MarkerClusterGroupProps {
      * deferred apply.
      */
     prepareExpand?: (appearing: MarkerState[]) => Promise<void>;
+
+    // ── Spiderfy (click-to-fan-out) ──────────────────────────────────────────
+    /**
+     * At or above this zoom, clicking a cluster fans its members out around
+     * the (kept) cluster marker, connected by leg polylines — useful when
+     * multiple markers share the same location and can never be separated by
+     * zooming. Clicking the same cluster again, or any recluster (camera
+     * move / data change), collapses the fan. Below this zoom the click
+     * falls through to `onClusterClick`. Undefined disables the feature.
+     */
+    spiderfyMinZoom?: number;
+    /** Marker diameter in px used by the overlap-avoiding layout (default 52). */
+    spiderfyMarkerSizePx?: number;
+    /** Extra gap between fanned-out markers in px (default 8). */
+    spiderfyMarkerMarginPx?: number;
+    /** Leg polyline color (default '#666666'). */
+    spiderfyLegColor?: string;
+    /** Leg polyline width (default 1.5). */
+    spiderfyLegWidth?: number;
+    /**
+     * Called when a spiderfy fan opens (true) or collapses (false) — e.g. to
+     * close an info bubble when the user clicks another cluster or the fan
+     * is dismissed by a camera move.
+     */
+    onSpiderfyChange?: (open: boolean) => void;
 }
 
 /**
@@ -180,6 +279,12 @@ export function MarkerClusterGroup(props: MarkerClusterGroupProps): React.ReactE
         debugHullPolygons,
         onDebugInfo,
         prepareExpand,
+        spiderfyMinZoom,
+        spiderfyMarkerSizePx = 52,
+        spiderfyMarkerMarginPx = 8,
+        spiderfyLegColor = '#666666',
+        spiderfyLegWidth = 1.5,
+        onSpiderfyChange,
     } = props;
 
     const parentScope = useMapViewScope();
@@ -190,18 +295,29 @@ export function MarkerClusterGroup(props: MarkerClusterGroupProps): React.ReactE
     // not the parent's.
     const localScope = useMemo(() => new MapViewScope(), []);
 
+    // Cluster clicks first try spiderfy (when configured & zoomed in enough),
+    // then fall through to the app's onClusterClick. Stable identity so the
+    // strategy is not re-created on every render.
+    const onClusterClickRef = useRef(onClusterClick);
+    useLayoutEffect(() => { onClusterClickRef.current = onClusterClick; }, [onClusterClick]);
+    const handleClusterMarkerClick = useCallback((cluster: MarkerCluster) => {
+        if (trySpiderfyRef.current(cluster)) return;
+        onClusterClickRef.current?.(cluster);
+    }, []);
+    const clusterClickable = onClusterClick != null || spiderfyMinZoom != null;
+
     // Strategy is re-created whenever clustering options change.
     const strategyOptions = useMemo<MarkerClusterOptions>(() => ({
         clusterRadiusPx,
         minClusterSize,
         expandMargin,
         clusterIconProvider,
-        onClusterClick,
+        onClusterClick: clusterClickable ? handleClusterMarkerClick : null,
         debugHullPolygons,
         tileSize,
         enableZoomAnimation,
         enablePanAnimation,
-    }), [clusterRadiusPx, minClusterSize, expandMargin, clusterIconProvider, onClusterClick, debugHullPolygons, tileSize, enableZoomAnimation, enablePanAnimation]);
+    }), [clusterRadiusPx, minClusterSize, expandMargin, clusterIconProvider, clusterClickable, handleClusterMarkerClick, debugHullPolygons, tileSize, enableZoomAnimation, enablePanAnimation]);
 
     const strategy = useMemo(
         () => new MarkerClusterStrategy(strategyOptions),
@@ -357,6 +473,120 @@ export function MarkerClusterGroup(props: MarkerClusterGroupProps): React.ReactE
 
     const prepareExpandRef = useRef(prepareExpand);
     useLayoutEffect(() => { prepareExpandRef.current = prepareExpand; }, [prepareExpand]);
+
+    // ── Spiderfy ──────────────────────────────────────────────────────────────
+    const spiderfyStateRef = useRef<{ clusterKey: string; markerIds: string[]; legIds: string[] } | null>(null);
+    const spiderfyTokenRef = useRef(0);
+
+    const onSpiderfyChangeRef = useRef(onSpiderfyChange);
+    useLayoutEffect(() => { onSpiderfyChangeRef.current = onSpiderfyChange; }, [onSpiderfyChange]);
+
+    const collapseSpiderfy = useCallback(() => {
+        spiderfyTokenRef.current += 1;
+        const current = spiderfyStateRef.current;
+        if (!current) return;
+        spiderfyStateRef.current = null;
+        parentScope.markerCollector.applyDiff([], current.markerIds);
+        parentScope.polylineCollector.applyDiff([], current.legIds);
+        onSpiderfyChangeRef.current?.(false);
+    }, [parentScope]);
+
+    // 最新の props/コンテキストを閉じ込めた spiderfy 実装(ref 経由で安定参照)
+    const trySpiderfyRef = useRef<(cluster: MarkerCluster) => boolean>(() => false);
+    trySpiderfyRef.current = (cluster: MarkerCluster): boolean => {
+        if (spiderfyMinZoom == null) return false;
+        const camera = cameraRef.current;
+        if (!camera || camera.zoom < spiderfyMinZoom) return false;
+
+        const clusterKey = cluster.markerIds.slice().sort().join(',');
+        if (spiderfyStateRef.current?.clusterKey === clusterKey) {
+            collapseSpiderfy();
+            return true;
+        }
+        collapseSpiderfy();
+
+        const holder = (controller as unknown as { holder?: {
+            toScreenOffset(p: GeoPoint): Offset | null;
+            fromScreenOffsetSync(o: Offset): GeoPoint | null;
+        } } | null)?.holder;
+        if (!holder) return false;
+
+        const sourceById = new Map(markersRef.current.map((m) => [m.id, m]));
+        const members = cluster.markerIds
+            .map((id) => sourceById.get(id))
+            .filter((m): m is MarkerState => m != null);
+        if (members.length === 0) return false;
+
+        // 展開・脚線の中心はクラスタマーカーの「実際の描画位置」を使う。
+        // (中心キャッシュの安定化により、描画位置がメンバー平均から
+        // ずれることがあるため。ずれていても脚線がピンの根元に刺さる)
+        let centerGeo = createGeoPoint({
+            latitude: members.reduce((s, m) => s + m.position.latitude, 0) / members.length,
+            longitude: members.reduce((s, m) => s + m.position.longitude, 0) / members.length,
+        });
+        for (const state of prevOutputRef.current.values()) {
+            if (state.extra === (cluster as unknown)) {
+                centerGeo = createGeoPoint({ latitude: state.position.latitude, longitude: state.position.longitude });
+                break;
+            }
+        }
+        const centerPx = holder.toScreenOffset(centerGeo);
+        if (!centerPx) return false;
+
+        // 周囲に既に描画されている出力マーカー(他クラスタ・他の個別マーカー)を
+        // 障害物として渡し、展開メンバーが重ならないようにする。
+        // クリックされたクラスタ自身(中心とほぼ同位置)は除外し、代わりに
+        // ピン形クラスタの頭部を疑似障害物として加える
+        const obstacles: Offset[] = [];
+        for (const state of prevOutputRef.current.values()) {
+            const px = holder.toScreenOffset(state.position);
+            if (!px) continue;
+            const rel = { x: px.x - centerPx.x, y: px.y - centerPx.y };
+            const d = Math.hypot(rel.x, rel.y);
+            if (d < 2 || d > 300) continue; // 自分自身 or 遠すぎるものは無視
+            obstacles.push(rel);
+        }
+        obstacles.push({ x: 0, y: -Math.round(spiderfyMarkerSizePx / 2) });
+
+        const offsets = spiderfyLayout(members.length, spiderfyMarkerSizePx, spiderfyMarkerMarginPx, obstacles);
+        const clones: MarkerState[] = [];
+        const legs: PolylineState[] = [];
+        members.forEach((member, index) => {
+            const geo = holder.fromScreenOffsetSync({
+                x: centerPx.x + offsets[index].x,
+                y: centerPx.y + offsets[index].y,
+            });
+            if (!geo) return;
+            clones.push(member.copy({ id: `spider_${member.id}`, position: geo, zIndex: 2000 }));
+            legs.push(createPolylineState({
+                id: `spiderleg_${member.id}`,
+                points: [centerGeo, geo],
+                strokeColor: spiderfyLegColor,
+                strokeWidth: spiderfyLegWidth,
+                geodesic: false,
+            }));
+        });
+        if (clones.length === 0) return false;
+
+        const apply = () => {
+            spiderfyStateRef.current = { clusterKey, markerIds: clones.map((c) => c.id), legIds: legs.map((l) => l.id) };
+            parentScope.polylineCollector.applyDiff(legs, []);
+            parentScope.markerCollector.applyDiff(clones, []);
+            onSpiderfyChangeRef.current?.(true);
+        };
+        const prepare = prepareExpandRef.current;
+        if (prepare) {
+            const token = ++spiderfyTokenRef.current;
+            void Promise.resolve(prepare(clones))
+                .catch(() => undefined)
+                .then(() => {
+                    if (spiderfyTokenRef.current === token) apply();
+                });
+        } else {
+            apply();
+        }
+        return true;
+    };
     // Monotonic token: a newer recluster invalidates any apply still waiting
     // on prepareExpand, so a stale cluster state is never rendered.
     const pendingPrepareTokenRef = useRef(0);
@@ -364,6 +594,8 @@ export function MarkerClusterGroup(props: MarkerClusterGroupProps): React.ReactE
     const runRecluster = useCallback(() => {
         const camera = cameraRef.current;
         if (!camera) return;
+        // Any recluster (camera move / data change) collapses an open spiderfy.
+        collapseSpiderfy();
         const result = strategy.computeClusters({
             markers: markersRef.current,
             cameraPosition: camera,
@@ -394,7 +626,7 @@ export function MarkerClusterGroup(props: MarkerClusterGroupProps): React.ReactE
         }
         pendingPrepareTokenRef.current += 1;
         finish();
-    }, [strategy, updateHullPolygons, applyOutput, zoomAnimationDurationMs]);
+    }, [strategy, updateHullPolygons, applyOutput, zoomAnimationDurationMs, collapseSpiderfy]);
 
     // Stable refs so the camera effect can always call the latest versions
     // without needing to re-register the listener.
@@ -484,6 +716,12 @@ export function MarkerClusterGroup(props: MarkerClusterGroupProps): React.ReactE
     useEffect(() => {
         return () => {
             animRef.current?.cancel();
+            const spider = spiderfyStateRef.current;
+            if (spider) {
+                spiderfyStateRef.current = null;
+                parentScope.markerCollector.applyDiff([], spider.markerIds);
+                parentScope.polylineCollector.applyDiff([], spider.legIds);
+            }
             parentScope.markerCollector.applyDiff([], ourIdsRef.current);
             parentScope.polygonCollector.applyDiff([], hullPolygonIdsRef.current);
             ourIdsRef.current = new Set();

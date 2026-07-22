@@ -327,22 +327,29 @@ export class MarkerClusterStrategy {
         for (const merged of finalMergedClusters) {
             if (merged.members.length >= this.minClusterSize) {
                 // Compute centroid via convex-hull shoelace formula (in pixel space).
+                // Degenerate hulls (all members at nearly the same point) fall back
+                // to the member average, so a same-venue cluster is rendered exactly
+                // at that venue rather than at the first member / a cached position.
                 const hull = this.convexHullProjected(merged.members, zoom);
                 const centroidPx = this.polygonCentroidProjected(hull);
-                const initialCenter = centroidPx
+                const center = centroidPx
                     ? this.unprojectPixel(centroidPx, zoom)
-                    : merged.center;
+                    : createGeoPoint({
+                        latitude: merged.members.reduce((s, m) => s + m.position.latitude, 0) / merged.members.length,
+                        longitude: merged.members.reduce((s, m) => s + m.position.longitude, 0) / merged.members.length,
+                    });
 
-                // Stabilize: reuse the last known center for this cell if unchanged.
-                const [cx, cy] = this.projectToPixel(initialCenter, zoom);
+                // The rendered center is recomputed from the CURRENT members on
+                // every recluster (camera idle). Membership-stable pans therefore
+                // yield the identical centroid — no flicker — while membership
+                // changes move the cluster to its true center instead of freezing
+                // it at a stale cached position.
+                const [cx, cy] = this.projectToPixel(center, zoom);
                 const cell: ClusterCell = {
                     x: Math.floor(cx / effectiveRadiusPx),
                     y: Math.floor(cy / effectiveRadiusPx),
                 };
                 const clusterId = this.buildClusterId(cell, zoom);
-                const center = (!zoomChanged && stableSource && this.lastClusterPositions.has(clusterId))
-                    ? this.lastClusterPositions.get(clusterId)!
-                    : initialCenter;
 
                 const radiusMeters = this.calculateClusterRadiusMeters(center, merged.members);
 
