@@ -84,13 +84,18 @@ export function App() {
 
 ## API 概要
 
+props は Android SDK の `MarkerClusterGroupState` と 1 対 1 で対応します(名前・既定値・意味がすべて同じ)。
+
 - `MarkerClusterGroup` — 渡した `markers`(`@mapconductor/js-sdk-core` の `MarkerState` 配列)をクラスタリングします。主な props:
-  - `clusterRadiusPx`、`minClusterSize`、`expandMargin`、`tileSize`、`cameraIdleDebounceMs` — クラスタリングの挙動
-  - `clusterIconProvider` — クラスターのサイズに応じた独自アイコンの提供
+  - `clusterRadiusPx`、`minClusterSize`、`expandMargin`、`tileSize`、`cameraIdleDebounceMillis` — クラスタリングの挙動
+  - `clusterIconProvider` / `clusterIconProviderWithTurn` — クラスターのサイズに応じた独自アイコンの提供(後者はズームのターン番号も受け取ります)
   - `onClusterClick` — `MarkerCluster`(`count`、`markerIds`)を受け取ります。典型的なハンドラはカメラをズームインさせます
-  - `enableZoomAnimation`、`enablePanAnimation`、`zoomAnimationDurationMs` — クラスター遷移のアニメーション
+  - `spiderfyMinZoom`、`spiderfyMarkerSizePx`、`spiderfyMarkerMarginPx`、`spiderfyLegColor`、`spiderfyLegWidth`、`onSpiderfyChange` — 同一地点に重なったマーカーを、クラスターのクリックで扇状に展開します
+  - `prepareExpand` — 新たに現れるマーカーが表示される前にアイコンを先読みします
+  - `enableZoomAnimation`、`enablePanAnimation`、`zoomAnimationDurationMillis` — クラスター遷移のアニメーション
+  - `trackMarkerUpdates`(既定 `true`)— `markerState.position = …` のような直接変更で再クラスタリングします
   - `debugHullPolygons` — チューニング時にクラスターの外周を可視化
-- `MarkerClusterStrategy` — 基盤となるクラスタリングエンジン。カスタム統合で直接使用できます。エクスポートされたデフォルト値(`DEFAULT_CLUSTER_RADIUS_PX` など)が組み込みのチューニングを示します。
+- `MarkerClusterStrategy` — クラスタリングエンジン。Android と同じく、ソース状態・カメラのデバウンス・クラスタリング・アニメーション・spiderfy までを一手に持ち、`MarkerOverlayRenderer` 経由で描画します。コンポーネントはマーカーとカメライベントを渡すだけです。`ClusterMarkerOverlayRenderer` と `StrategyMarkerController` と組み合わせて直接利用できます。エクスポートされたデフォルト値(`DEFAULT_CLUSTER_RADIUS_PX` など)が組み込みのチューニングを示します。
 
 ## 関連パッケージ
 

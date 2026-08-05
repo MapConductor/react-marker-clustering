@@ -12,8 +12,9 @@ export interface MarkerCluster {
 
 /**
  * Debug information for a single cluster.
- * Emitted via `MarkerClusterStrategy.onDebugInfoChanged` when `debugHullPolygons` is true.
- * Mirrors `MarkerClusterDebugInfo.kt` in the Android SDK.
+ * Published through `MarkerClusterStrategy.debugInfoFlow`; `MarkerClusterGroup`
+ * turns it into hull polygons when `debugHullPolygons` is enabled.
+ * Mirrors `MarkerClusterDebugInfo` in the Android SDK.
  */
 export interface MarkerClusterDebugInfo {
     readonly id: string;
@@ -23,6 +24,17 @@ export interface MarkerClusterDebugInfo {
     readonly cellX: number;
     readonly cellY: number;
     readonly hullPoints: GeoPoint[];
+}
+
+/**
+ * A leg polyline of an open spiderfy fan, connecting the cluster marker
+ * (`start`) to one fanned-out member marker (`end`).
+ * Mirrors `SpiderfyLeg` in the Android SDK.
+ */
+export interface SpiderfyLeg {
+    readonly id: string;
+    readonly start: GeoPoint;
+    readonly end: GeoPoint;
 }
 
 /** Declarative native cluster icon options. Functions cannot cross the RN bridge. */

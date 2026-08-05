@@ -28,9 +28,9 @@ export interface MarkerClusterGroupProps {
     onClusterClick?: ((cluster: MarkerCluster) => void) | null;
     enableZoomAnimation?: boolean;
     enablePanAnimation?: boolean;
-    zoomAnimationDurationMs?: number;
+    zoomAnimationDurationMillis?: number;
     debugHullPolygons?: boolean;
-    cameraIdleDebounceMs?: number;
+    cameraIdleDebounceMillis?: number;
     tileSize?: number;
 }
 
@@ -55,9 +55,9 @@ function NativeMarkerClusterGroup(props: MarkerClusterGroupProps): React.ReactEl
         onClusterClick,
         enableZoomAnimation,
         enablePanAnimation,
-        zoomAnimationDurationMs,
+        zoomAnimationDurationMillis,
         debugHullPolygons,
-        cameraIdleDebounceMs,
+        cameraIdleDebounceMillis,
         tileSize,
     } = props;
     const localScope = useMemo(() => new MapViewScope(), []);
@@ -110,9 +110,9 @@ function NativeMarkerClusterGroup(props: MarkerClusterGroupProps): React.ReactEl
                 onClusterClickEnabled: onClusterClick != null,
                 enableZoomAnimation,
                 enablePanAnimation,
-                zoomAnimationDurationMs,
+                zoomAnimationDurationMillis,
                 debugHullPolygons,
-                cameraIdleDebounceMs,
+                cameraIdleDebounceMillis,
                 tileSize,
             },
         },
@@ -127,9 +127,9 @@ function NativeMarkerClusterGroup(props: MarkerClusterGroupProps): React.ReactEl
         onClusterClick,
         enableZoomAnimation,
         enablePanAnimation,
-        zoomAnimationDurationMs,
+        zoomAnimationDurationMillis,
         debugHullPolygons,
-        cameraIdleDebounceMs,
+        cameraIdleDebounceMillis,
         tileSize,
     ]);
 

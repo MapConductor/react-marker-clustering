@@ -84,13 +84,18 @@ El ejemplo de oficinas de correo de `examples/basic` agrupa 24,526 marcadores de
 
 ## Resumen de la API
 
+Las props reflejan una a una a `MarkerClusterGroupState` del SDK de Android: mismos nombres, mismos valores por defecto, mismo significado.
+
 - `MarkerClusterGroup` — agrupa los `markers` dados (un arreglo de `MarkerState` de `@mapconductor/js-sdk-core`). Props principales:
-  - `clusterRadiusPx`, `minClusterSize`, `expandMargin`, `tileSize`, `cameraIdleDebounceMs` — comportamiento del clustering
-  - `clusterIconProvider` — provee tu propio ícono según el tamaño del clúster
+  - `clusterRadiusPx`, `minClusterSize`, `expandMargin`, `tileSize`, `cameraIdleDebounceMillis` — comportamiento del clustering
+  - `clusterIconProvider` / `clusterIconProviderWithTurn` — provee tu propio ícono según el tamaño del clúster (el segundo también recibe el turno de zoom)
   - `onClusterClick` — recibe un `MarkerCluster` (`count`, `markerIds`); los handlers típicos acercan la cámara
-  - `enableZoomAnimation`, `enablePanAnimation`, `zoomAnimationDurationMs` — transiciones animadas de clústeres
+  - `spiderfyMinZoom`, `spiderfyMarkerSizePx`, `spiderfyMarkerMarginPx`, `spiderfyLegColor`, `spiderfyLegWidth`, `onSpiderfyChange` — al hacer clic en un clúster, despliega en abanico los marcadores que comparten ubicación
+  - `prepareExpand` — precarga los íconos antes de que aparezcan los marcadores nuevos
+  - `enableZoomAnimation`, `enablePanAnimation`, `zoomAnimationDurationMillis` — transiciones animadas de clústeres
+  - `trackMarkerUpdates` (por defecto `true`) — vuelve a agrupar cuando la app muta un `MarkerState` en el lugar (`markerState.position = …`)
   - `debugHullPolygons` — visualiza los contornos de los clústeres durante el ajuste
-- `MarkerClusterStrategy` — el motor de clustering subyacente, utilizable directamente para integraciones personalizadas; los valores por defecto exportados (`DEFAULT_CLUSTER_RADIUS_PX`, …) documentan el ajuste integrado.
+- `MarkerClusterStrategy` — el motor de clustering. Igual que en Android, es dueño de todo el pipeline (estados fuente, debounce de cámara, clustering, animación y spiderfy) y dibuja a través de un `MarkerOverlayRenderer`; el componente solo le entrega marcadores y eventos de cámara. Se puede usar directamente junto con `ClusterMarkerOverlayRenderer` y `StrategyMarkerController`; los valores por defecto exportados (`DEFAULT_CLUSTER_RADIUS_PX`, …) documentan el ajuste integrado.
 
 ## Paquetes relacionados
 

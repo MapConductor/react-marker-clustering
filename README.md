@@ -93,18 +93,32 @@ The `examples/basic` post-office sample clusters 24,526 markers this way.
 
 ## API overview
 
+The props mirror `MarkerClusterGroupState` in the Android SDK one-for-one —
+same names, same defaults, same meaning.
+
 - `MarkerClusterGroup` — clusters the given `markers` (an array of
   `MarkerState` from `@mapconductor/js-sdk-core`). Key props:
   - `clusterRadiusPx`, `minClusterSize`, `expandMargin`, `tileSize`,
-    `cameraIdleDebounceMs` — clustering behavior
-  - `clusterIconProvider` — supply your own cluster icon per cluster size
+    `cameraIdleDebounceMillis` — clustering behavior
+  - `clusterIconProvider` / `clusterIconProviderWithTurn` — supply your own
+    cluster icon per cluster size (the latter also receives the zoom turn)
   - `onClusterClick` — receives a `MarkerCluster` (`count`, `markerIds`);
     typical handlers zoom the camera in
+  - `spiderfyMinZoom`, `spiderfyMarkerSizePx`, `spiderfyMarkerMarginPx`,
+    `spiderfyLegColor`, `spiderfyLegWidth`, `onSpiderfyChange` — click a cluster
+    to fan its members out, for markers that share a location
+  - `prepareExpand` — preload icons before newly appearing markers pop in
   - `enableZoomAnimation`, `enablePanAnimation`,
-    `zoomAnimationDurationMs` — animated cluster transitions
+    `zoomAnimationDurationMillis` — animated cluster transitions
+  - `trackMarkerUpdates` (default `true`) — re-cluster when the app mutates a
+    `MarkerState` in place (`markerState.position = …`)
   - `debugHullPolygons` — visualize cluster hulls while tuning
-- `MarkerClusterStrategy` — the underlying clustering engine, usable directly
-  for custom integrations; exported defaults (`DEFAULT_CLUSTER_RADIUS_PX`, …)
+- `MarkerClusterStrategy` — the clustering engine. It owns the whole pipeline
+  (source states, camera debouncing, clustering, animation, spiderfy) and
+  renders through a `MarkerOverlayRenderer`, exactly as on Android; the
+  component only feeds it markers and camera events. Usable directly for custom
+  integrations, together with `ClusterMarkerOverlayRenderer` and
+  `StrategyMarkerController`. Exported defaults (`DEFAULT_CLUSTER_RADIUS_PX`, …)
   document the built-in tuning.
 
 ## Related packages
