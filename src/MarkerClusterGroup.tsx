@@ -1,19 +1,22 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import {
+    CollectorMarkerOverlayRenderer,
     createPolygonState,
     createPolylineState,
+    MarkerRenderingSupportKey,
     StrategyMarkerController,
-    type MapCameraPosition,
     type MarkerState,
     type PolygonState,
 } from '@mapconductor/js-sdk-core';
 import {
-    MapContext,
-    MapViewScope,
-    MapViewScopeProvider,
-    useMapViewScope,
+  MapContext,
+  MapViewScope,
+  MapViewScopeProvider,
+  useMapServiceRegistry,
 } from '@mapconductor/js-sdk-react';
-import { ClusterMarkerOverlayRenderer } from './ClusterMarkerOverlayRenderer';
+import {
+  useMapViewScope,
+} from '@mapconductor/js-sdk-react/internal';
 import type { MarkerCluster, MarkerClusterDebugInfo } from './MarkerCluster';
 import {
     MarkerClusterStrategy,
@@ -285,9 +288,18 @@ export function MarkerClusterGroup(props: MarkerClusterGroupProps): React.ReactE
 
     // ── Rendering pipeline (the Android `MarkerRenderingGroup`) ───────────────
 
+    // レンダラはプロバイダから受け取る。android-sdk の `MarkerRenderingGroup` が
+    // `LocalMapServiceRegistry.current.get(MarkerRenderingSupportKey)` で解決するのと同じ経路で、
+    // ios-sdk の `MapServiceRegistryScope.current.get(MarkerRenderingSupportKey.self)` にも対応する。
+    // 以前は parentScope.markerCollector を直接掴んでレンダラを自前で組み立てていたが、
+    // それだとプラグインがマップ内部の実装に手を伸ばす形になり、プロバイダ側が
+    // 描画経路を差し替える余地も無かった。
+    const services = useMapServiceRegistry();
+    const renderingSupport = services.get(MarkerRenderingSupportKey);
+
     const renderer = useMemo(
-        () => (controller ? new ClusterMarkerOverlayRenderer(parentScope.markerCollector, controller.holder) : null),
-        [controller, parentScope],
+        () => (renderingSupport ? renderingSupport.createMarkerRenderer(strategy) : null),
+        [renderingSupport, strategy],
     );
 
     const markerController = useMemo(
@@ -295,29 +307,36 @@ export function MarkerClusterGroup(props: MarkerClusterGroupProps): React.ReactE
         [strategy, renderer],
     );
 
+    // イベントコントローラもプロバイダが作り、プロバイダへ登録し返す
+    // （android-sdk の MarkerRenderingGroup と同じ 2 段）。
+    useEffect(() => {
+        if (!renderingSupport || !markerController || !renderer) return;
+        const eventController = renderingSupport.createMarkerEventController(markerController, renderer);
+        renderingSupport.registerMarkerEventController(eventController);
+    }, [renderingSupport, markerController, renderer]);
+
     // ── Camera subscription (chain with the existing single-slot listener) ────
 
     useEffect(() => {
         if (!controller || !markerController) return;
 
-        // Read the protected field from the concrete instance so we can restore
-        // it on unmount and chain it on each camera-move-end event.
-        type WithCb = { cameraMoveEndCallback?: ((camera: MapCameraPosition) => void) | null };
-        const previous = (controller as unknown as WithCb).cameraMoveEndCallback ?? null;
+        // オーバーレイコントローラとして登録すればカメラ変更が伝播してくる
+        // （android-sdk の MarkerClusterGroup が registerOverlayController するのと同じ）。
+        // 以前はコントローラの protected な cameraMoveEndCallback を覗いて単一スロットの
+        // リスナーに相乗りしていたが、レジストリができたので不要になった。
+        controller.registerOverlayController?.(markerController);
 
-        controller.setCameraMoveEndListener((camera: MapCameraPosition) => {
-            previous?.(camera);
-            void markerController.onCameraChanged(camera);
-        });
-
-        // Seed the initial camera so the first clustering pass can run.
-        const initial = controller.getCameraPosition();
+        // 初回のクラスタ計算を走らせるため、現在のカメラを 1 度だけ流し込む。
+        // 取得元は state（`mapViewState.cameraPosition`）で、コントローラの
+        // `getCameraPosition()` はプロバイダ内部用なので拡張からは触らない。
+        // 以降の変化は登録済みオーバーレイへの `onCameraChanged` で届く。
+        const initial = mapCtx?.state?.cameraPosition ?? null;
         if (initial) void markerController.onCameraChanged(initial);
 
         return () => {
-            controller.setCameraMoveEndListener(previous);
+            controller.unregisterOverlayController?.(markerController);
         };
-    }, [controller, markerController]);
+    }, [controller, markerController, mapCtx]);
 
     // ── Markers prop ─────────────────────────────────────────────────────────
 
@@ -430,7 +449,10 @@ export function MarkerClusterGroup(props: MarkerClusterGroupProps): React.ReactE
     // ── Teardown ─────────────────────────────────────────────────────────────
 
     useEffect(() => () => {
-        renderer?.reset();
+        // コレクタ連動レンダラは自分が書き込んだマーカーを回収する必要がある。
+        // プロバイダが独自のレンダラを返している場合はその後始末はプロバイダ側の責務
+        // （android-sdk / ios-sdk も、プラグインはレンダラの内部後始末をしない）。
+        if (renderer instanceof CollectorMarkerOverlayRenderer) renderer.reset();
         parentScope.polygonCollector.applyDiff([], hullPolygonIdsRef.current);
         parentScope.polylineCollector.applyDiff([], legPolylineIdsRef.current);
         hullPolygonIdsRef.current = new Set();

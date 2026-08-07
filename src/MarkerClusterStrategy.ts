@@ -361,7 +361,7 @@ export class MarkerClusterStrategy extends AbstractMarkerRenderingStrategy<Marke
     ): Promise<void> {
         this.lastCameraPosition = cameraPosition;
         const bounds = cameraPosition.visibleRegion?.bounds;
-        if (bounds && !bounds.isEmpty()) {
+        if (bounds && !bounds.isEmpty) {
             this.lastKnownViewport = bounds;
             this.lastKnownViewportZoom = cameraPosition.zoom;
         }
@@ -383,7 +383,7 @@ export class MarkerClusterStrategy extends AbstractMarkerRenderingStrategy<Marke
             // by 2^(zoomDelta) preserves the correct screen-space coverage so
             // markers newly visible after a zoom-out are still clustered.
             const currentViewport =
-                (currentCamera.visibleRegion?.bounds && !currentCamera.visibleRegion.bounds.isEmpty()
+                (currentCamera.visibleRegion?.bounds && !currentCamera.visibleRegion.bounds.isEmpty
                     ? currentCamera.visibleRegion.bounds
                     : null) ?? this.estimateViewport(currentCamera.zoom, currentCamera.position);
             if (!currentViewport) return;
@@ -724,7 +724,7 @@ export class MarkerClusterStrategy extends AbstractMarkerRenderingStrategy<Marke
             this.lastClusterPositions = clusterPositions;
             this.lastClusterAssignments = nextClusterAssignments;
             this.lastRenderCameraPosition = cameraPosition;
-            this.lastClusterCoverageBounds = coverageBounds.isEmpty() ? null : coverageBounds;
+            this.lastClusterCoverageBounds = coverageBounds.isEmpty ? null : coverageBounds;
             this.lastSourceStateVersion = sourceStateVersionSnapshot;
             this.lastSourceFingerprints = currentFingerprints;
         });
@@ -1486,7 +1486,7 @@ export class MarkerClusterStrategy extends AbstractMarkerRenderingStrategy<Marke
         point: GeoPointInterface,
         zoom: number,
     ): boolean {
-        if (!bounds || bounds.isEmpty()) return false;
+        if (!bounds || bounds.isEmpty) return false;
         const sw = bounds.southWest;
         const ne = bounds.northEast;
         if (!sw || !ne) return false;
@@ -1533,7 +1533,7 @@ export class MarkerClusterStrategy extends AbstractMarkerRenderingStrategy<Marke
     }
 
     private containsBounds(container: GeoRectBounds, target: GeoRectBounds): boolean {
-        if (container.isEmpty() || target.isEmpty()) return false;
+        if (container.isEmpty || target.isEmpty) return false;
         const sw = target.southWest;
         const ne = target.northEast;
         if (!sw || !ne) return false;

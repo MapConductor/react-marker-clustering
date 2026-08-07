@@ -14,7 +14,10 @@ export {
     type ClusterIconProviderWithTurn,
     type MarkerClusterOptions,
 } from './MarkerClusterStrategy';
-export { ClusterMarkerOverlayRenderer } from './ClusterMarkerOverlayRenderer';
+// レンダラ本体は js-sdk-core へ移した（プロバイダが MarkerRenderingSupport 経由で配るため、
+// プロバイダがクラスタリングパッケージに依存しないようにする必要がある）。
+// 旧名での import を壊さないよう別名で再エクスポートする。
+export { CollectorMarkerOverlayRenderer as ClusterMarkerOverlayRenderer } from '@mapconductor/js-sdk-core';
 export { MutableStateFlow, type StateFlow } from './StateFlow';
 export {
     MarkerClusterGroup,
