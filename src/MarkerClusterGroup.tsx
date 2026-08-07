@@ -11,6 +11,7 @@ import {
   MapViewScope,
   MapViewScopeProvider,
   useMapServiceRegistry,
+    mapContextInternal,
 } from '@mapconductor/js-sdk-react';
 import {
   useMapViewScope,
@@ -155,7 +156,9 @@ export function MarkerClusterGroup(props: MarkerClusterGroupProps): React.ReactE
 
     const parentScope = useMapViewScope();
     const mapCtx = useContext(MapContext);
-    const controller = mapCtx?.controller ?? null;
+    // 拡張モジュールは SDK 内部側。コントローラは公開型に出していないので
+    // 内部アクセサ経由で取り出す。
+    const controller = mapCtx ? mapContextInternal(mapCtx).controller : null;
 
     // Local scope so that child <Marker> components write to our collector,
     // not the parent's.

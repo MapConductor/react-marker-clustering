@@ -1,6 +1,6 @@
 import Foundation
 import MapConductorCore
-import MapConductorMarkerCluster
+import MapConductorMarkerClustering
 import MapConductorReactNativeCore
 import UIKit
 
