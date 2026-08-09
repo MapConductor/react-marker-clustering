@@ -10,7 +10,7 @@ Pod::Spec.new do |s|
   s.author = package["author"]
   s.homepage = "https://github.com/mapconductor/react-sdk"
   s.source = { :path => __dir__ }
-  s.platform = :ios, "15.1"
+  s.platform = :ios, "16.1"
   s.source_files = "ios/*.{h,m,mm,swift}"
   # MapConductorMarkerClustering is a source pod (see ios-sdk/ios-marker-clustering's podspec),
   # not a vendored prebuilt xcframework - see ios-sdk/CLAUDE.md's "iOS Provider Distribution"
