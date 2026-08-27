@@ -18,7 +18,7 @@ Pod::Spec.new do |s|
   # no library evolution) mode MapConductorCore itself uses, or Xcode's module-interface
   # verification fails with mismatched-deployment-target/"cannot load underlying module" errors.
   s.dependency "React-Core"
-  s.dependency "MapConductorCore"
+  s.dependency "MapConductorCore", "~> 1.3.0"
   s.dependency "MapConductorReactNativeCore"
-  s.dependency "MapConductorMarkerClustering"
+  s.dependency "MapConductorMarkerClustering", "~> 1.3.0"
 end
