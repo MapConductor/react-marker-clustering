@@ -62,7 +62,11 @@ declare class ClusterGeometry {
     positionFingerPrint(position: GeoPointInterface): string;
     /** 投影座標の凸包（Andrew's monotone chain）。3 点未満に潰れる場合は空を返す。 */
     convexHullProjected(members: MarkerState[], zoom: number): HullPoint[];
-    /** 靴ひも公式による多角形重心。面積が潰れている場合は頂点平均へ落とす。 */
+    /**
+     * 靴ひも公式による多角形重心。面積が潰れている場合は頂点平均へ落とす。
+     * 外積は最初の頂点からの相対座標で取る。絶対座標のままだと値が大きすぎて、
+     * 数 m 間隔のマーカーでは桁落ちで重心が数十 km ずれる。
+     */
     polygonCentroidProjected(hull: HullPoint[]): HullPoint | null;
 }
 
