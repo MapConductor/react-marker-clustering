@@ -255,20 +255,30 @@ export class ClusterGeometry {
         return hull.length >= 3 ? hull : [];
     }
 
-    /** 靴ひも公式による多角形重心。面積が潰れている場合は頂点平均へ落とす。 */
+    /**
+     * 靴ひも公式による多角形重心。面積が潰れている場合は頂点平均へ落とす。
+     * 外積は最初の頂点からの相対座標で取る。絶対座標のままだと値が大きすぎて、
+     * 数 m 間隔のマーカーでは桁落ちで重心が数十 km ずれる。
+     */
     polygonCentroidProjected(hull: HullPoint[]): HullPoint | null {
         if (hull.length < 3) return null;
 
+        const ox = hull[0].x;
+        const oy = hull[0].y;
         let twiceArea = 0;
         let cx = 0;
         let cy = 0;
         for (let i = 0; i < hull.length; i++) {
             const a = hull[i];
             const b = hull[(i + 1) % hull.length];
-            const cross = a.x * b.y - b.x * a.y;
+            const ax = a.x - ox;
+            const ay = a.y - oy;
+            const bx = b.x - ox;
+            const by = b.y - oy;
+            const cross = ax * by - bx * ay;
             twiceArea += cross;
-            cx += (a.x + b.x) * cross;
-            cy += (a.y + b.y) * cross;
+            cx += (ax + bx) * cross;
+            cy += (ay + by) * cross;
         }
 
         if (Math.abs(twiceArea) < 1e-6) {
@@ -279,6 +289,6 @@ export class ClusterGeometry {
             };
         }
 
-        return { x: cx / (3.0 * twiceArea), y: cy / (3.0 * twiceArea) };
+        return { x: ox + cx / (3.0 * twiceArea), y: oy + cy / (3.0 * twiceArea) };
     }
 }
