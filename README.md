@@ -8,6 +8,12 @@ markers into clusters inside any provider map view (`react-for-googlemaps`,
 handling, and animated expand/shrink transitions. Works on the web and,
 through the bundled Android/iOS modules, in React Native.
 
+## Demo
+
+[![Post office clusters on Google Maps](https://raw.githubusercontent.com/MapConductor/react-marker-clustering/main/docs/images/demo.jpg)](https://demo-react.mapconductor.com/google-maps/post-office-cluster/en)
+
+The [live demo](https://demo-react.mapconductor.com/google-maps/post-office-cluster/en) clusters 24,526 post offices in Japan with this package; tap a cluster to zoom in. The provider can be switched at the top of the page. The code is in the Quick start below.
+
 ## Installation
 
 ```shell
