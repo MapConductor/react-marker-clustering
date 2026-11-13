@@ -4,6 +4,12 @@
 
 MapConductor React SDK のマーカークラスタリング拡張です。近接するマーカーをクラスターにまとめ、任意のプロバイダのマップビュー(`react-for-googlemaps`、`react-for-maplibre`、`react-for-here` など)の中に描画します。カスタムクラスターアイコン、クリックハンドリング、展開/収縮のアニメーションに対応します。Web と、同梱の Android/iOS モジュールを通じて React Native の両方で動作します。
 
+## デモ
+
+[![Google Maps 上の郵便局クラスタ](https://raw.githubusercontent.com/MapConductor/react-marker-clustering/main/docs/images/demo.jpg)](https://demo-react.mapconductor.com/google-maps/post-office-cluster/en)
+
+[ライブデモ](https://demo-react.mapconductor.com/google-maps/post-office-cluster/en)では、このパッケージで日本全国 24,526 件の郵便局をクラスタリングしています。クラスタをタップするとズームインします。プロバイダは画面上部で切り替えられます。コードは下のクイックスタートにあります。
+
 ## インストール
 
 ```shell

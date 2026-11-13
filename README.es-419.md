@@ -4,6 +4,12 @@
 
 Extensión de agrupación de marcadores (clustering) para el SDK de React de MapConductor. Agrupa marcadores cercanos en clústeres dentro de cualquier vista de mapa de proveedor (`react-for-googlemaps`, `react-for-maplibre`, `react-for-here`, …), con íconos de clúster personalizados, manejo de clics y transiciones animadas de expansión/contracción. Funciona en la web y, mediante los módulos de Android/iOS incluidos, en React Native.
 
+## Demostración
+
+[![Agrupación de oficinas postales en Google Maps](https://raw.githubusercontent.com/MapConductor/react-marker-clustering/main/docs/images/demo.jpg)](https://demo-react.mapconductor.com/google-maps/post-office-cluster/en)
+
+La [demo en vivo](https://demo-react.mapconductor.com/google-maps/post-office-cluster/en) agrupa con este paquete 24,526 oficinas postales de Japón; toca un grupo para acercarte. El proveedor se cambia en la parte superior de la página. El código está en el inicio rápido de abajo.
+
 ## Instalación
 
 ```shell
