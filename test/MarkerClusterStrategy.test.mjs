@@ -224,3 +224,28 @@ test('clear: 元データ・デバッグ情報・描画済みの記憶を捨て�
     assert.equal(strategy.markerManager.allEntities().length, 0);
     assert.deepEqual(strategy.spiderfyLegsFlow.value, []);
 });
+
+test('onUpdate が続けて大量に来ても、再クラスタは 1 件ごとではなくまとめて走る', async () => {
+    // 共有 ImageIcon の画像が届くと全マーカーの fingerprint が一斉に変わり、
+    // StrategyMarkerController.update が 1 件ずつ順に onUpdate を呼ぶ。
+    // 1 件ごとに再クラスタしていたため、24,526 件の郵便局で Leaflet が 50 秒以上止まった。
+    const strategy = new MarkerClusterStrategy({ cameraIdleDebounceMillis: 0 });
+    const renderer = fakeRenderer();
+    const states = Array.from({ length: 200 }, (_, i) => marker(`m${i}`, (i % 20) * 0.01, Math.floor(i / 20) * 0.01));
+    await strategy.onAdd({ data: states, viewport: VIEW, renderer });
+    await strategy.onCameraChanged(camera(10), renderer);
+    await until(() => clusterIdOf(renderer), 'cluster');
+
+    const planner = strategy.components.planner;
+    const plan = planner.plan.bind(planner);
+    let plans = 0;
+    planner.plan = (input) => { plans++; return plan(input); };
+
+    for (const state of states) {
+        state.position = p(state.position.latitude + 0.0001, state.position.longitude);
+        await strategy.onUpdate({ state, viewport: VIEW, renderer });
+    }
+    await sleep(50);
+    assert.ok(plans >= 1, 'the edits are clustered');
+    assert.equal(plans, 1, `re-clustered ${plans} times for ${states.length} edits`);
+});

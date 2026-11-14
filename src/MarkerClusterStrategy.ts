@@ -93,6 +93,16 @@ export class MarkerClusterStrategy extends AbstractMarkerRenderingStrategy<Marke
     private readonly sourceFingerprints = new Map<string, MarkerFingerPrint>();
     private sourceStateVersion = 0;
 
+    // Edits handed in by onUpdate, applied at the start of the next render.
+    // A shared ImageIcon finishing its load changes every marker's fingerprint
+    // at once, and StrategyMarkerController hands the edits over one by one.
+    // onUpdate used to take the render lock and queue a render per edit, so N
+    // edits meant N full re-clusters (24,526 post offices froze Leaflet for over
+    // 50 s). Now the edits are parked and one render is queued after the burst.
+    private readonly pendingUpdates = new Map<string, MarkerState>();
+    private pendingUpdateViewport: GeoRectBounds | null = null;
+    private updateFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
     // JS has no threads, but `await` points inside renderClusters() interleave
     // just like Android's coroutines do, so the same critical section applies.
     private readonly semaphore = new Mutex();
@@ -166,6 +176,12 @@ export class MarkerClusterStrategy extends AbstractMarkerRenderingStrategy<Marke
     override clear(): void {
         this.sourceStates.clear();
         this.sourceFingerprints.clear();
+        this.pendingUpdates.clear();
+        this.pendingUpdateViewport = null;
+        if (this.updateFlushTimer !== null) {
+            clearTimeout(this.updateFlushTimer);
+            this.updateFlushTimer = null;
+        }
         this.sourceStateVersion = 0;
         this.markerManager.clear();
         this._debugInfoFlow.value = [];
@@ -201,6 +217,7 @@ export class MarkerClusterStrategy extends AbstractMarkerRenderingStrategy<Marke
         // renderClusters() iterates `sourceStates`; guard mutations with the
         // same lock so a render in flight never sees a half-applied update.
         await this.semaphore.withLock(() => {
+            this.applyPendingUpdates();
             this.updateSourceStates(params.data);
         });
         const scheduler = this.components.scheduler;
@@ -215,20 +232,24 @@ export class MarkerClusterStrategy extends AbstractMarkerRenderingStrategy<Marke
         viewport: GeoRectBounds;
         renderer: MarkerOverlayRenderer<MarkerState>;
     }): Promise<boolean> {
-        await this.semaphore.withLock(() => {
-            const nextFingerPrint = params.state.fingerPrint();
-            const prevFingerPrint = this.sourceFingerprints.get(params.state.id);
-            this.sourceStates.set(params.state.id, params.state);
-            this.sourceFingerprints.set(params.state.id, nextFingerPrint);
-            if (!prevFingerPrint || !fingerPrintEquals(prevFingerPrint, nextFingerPrint)) {
-                this.sourceStateVersion++;
-            }
-        });
-        const scheduler = this.components.scheduler;
-        scheduler.lastRenderer = params.renderer;
-        if (!scheduler.lastCameraPosition) return true;
-        scheduler.enqueue(scheduler.lastCameraPosition, params.viewport, params.renderer, scheduler.currentToken);
+        this.pendingUpdates.set(params.state.id, params.state);
+        this.pendingUpdateViewport = params.viewport;
+        this.components.scheduler.lastRenderer = params.renderer;
+        // The edits of one burst arrive through microtasks, so a timer fires
+        // only after all of them are parked.
+        if (this.updateFlushTimer === null) {
+            this.updateFlushTimer = setTimeout(() => this.flushUpdates(), 0);
+        }
         return true;
+    }
+
+    private flushUpdates(): void {
+        this.updateFlushTimer = null;
+        const scheduler = this.components.scheduler;
+        const viewport = this.pendingUpdateViewport;
+        const renderer = scheduler.lastRenderer;
+        if (!scheduler.lastCameraPosition || !viewport || !renderer) return;
+        scheduler.enqueue(scheduler.lastCameraPosition, viewport, renderer, scheduler.currentToken);
     }
 
     async onCameraChanged(
@@ -236,6 +257,25 @@ export class MarkerClusterStrategy extends AbstractMarkerRenderingStrategy<Marke
         renderer: MarkerOverlayRenderer<MarkerState>,
     ): Promise<void> {
         this.components.scheduler.onCameraChanged(cameraPosition, renderer);
+    }
+
+    /**
+     * Applies the edits onUpdate parked. Call with the lock held. An edit for a
+     * marker that was removed meanwhile is dropped: onUpdate never adds.
+     */
+    private applyPendingUpdates(): void {
+        if (this.pendingUpdates.size === 0) return;
+        for (const state of this.pendingUpdates.values()) {
+            if (!this.sourceStates.has(state.id)) continue;
+            const nextFingerPrint = state.fingerPrint();
+            const prevFingerPrint = this.sourceFingerprints.get(state.id);
+            this.sourceStates.set(state.id, state);
+            this.sourceFingerprints.set(state.id, nextFingerPrint);
+            if (!prevFingerPrint || !fingerPrintEquals(prevFingerPrint, nextFingerPrint)) {
+                this.sourceStateVersion++;
+            }
+        }
+        this.pendingUpdates.clear();
     }
 
     private updateSourceStates(data: MarkerState[]): void {
@@ -264,6 +304,7 @@ export class MarkerClusterStrategy extends AbstractMarkerRenderingStrategy<Marke
         const { scheduler, geometry, builder, planner, markerRenderer, spiderfy } = this.components;
 
         await this.semaphore.withLock(async () => {
+            this.applyPendingUpdates();
             if (!scheduler.isCurrent(token)) return;
 
             const zoom = cameraPosition.zoom;
