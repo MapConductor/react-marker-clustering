@@ -238,7 +238,7 @@ export class ClusterMarkerRenderer {
         let animatedStartEntities: MarkerEntity<MarkerState>[] = [];
         if (animatedAddEntries.length > 0) {
             animatedStartEntities = await this.addStatesToRenderer(
-                animatedAddEntries.map((entry) => entry.state.copy({ position: entry.start })),
+                animatedAddEntries.map((entry) => entry.state.copy({ id: entry.state.id, position: entry.start })),
                 renderer,
             );
             await renderer.onPostProcess();

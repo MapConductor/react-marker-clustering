@@ -82,7 +82,7 @@ export class ClusterMarkerAnimator {
                 // マーカーは複製ではなくアプリ所有のインスタンスを返せる。
                 const nextState = step === steps && move.restoreBaseStateAtEnd
                     ? move.baseState
-                    : move.baseState.copy({ position: this.geometry.interpolatePosition(move.start, move.end, t) });
+                    : move.baseState.copy({ id: move.baseState.id, position: this.geometry.interpolatePosition(move.start, move.end, t) });
                 return {
                     current: createMarkerEntity<MarkerState>({
                         marker: move.entity.marker,
