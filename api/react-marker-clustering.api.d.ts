@@ -332,6 +332,9 @@ declare class MarkerClusterStrategy extends AbstractMarkerRenderingStrategy<Mark
     private readonly sourceStates;
     private readonly sourceFingerprints;
     private sourceStateVersion;
+    private readonly pendingUpdates;
+    private pendingUpdateViewport;
+    private updateFlushTimer;
     private readonly semaphore;
     private readonly _debugInfoFlow;
     private forceNextRender;
@@ -375,7 +378,13 @@ declare class MarkerClusterStrategy extends AbstractMarkerRenderingStrategy<Mark
         viewport: GeoRectBounds;
         renderer: MarkerOverlayRenderer<MarkerState>;
     }): Promise<boolean>;
+    private flushUpdates;
     onCameraChanged(cameraPosition: MapCameraPosition, renderer: MarkerOverlayRenderer<MarkerState>): Promise<void>;
+    /**
+     * Applies the edits onUpdate parked. Call with the lock held. An edit for a
+     * marker that was removed meanwhile is dropped: onUpdate never adds.
+     */
+    private applyPendingUpdates;
     private updateSourceStates;
     private renderClusters;
     /**
